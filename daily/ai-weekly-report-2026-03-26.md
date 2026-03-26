@@ -50,3 +50,10 @@
 - DTO 2개, Service 메서드 2개 신규 생성
 - 기존 프론트엔드(infoall.xml) 호환성 유지 (/api/license/data 레거시 응답 유지)
 - 증적: `LicenseController.java`, `LicenseService.java`, `LicenseDataResponseDTO.java`, `LicenseTrackingResponseDTO.java` (미커밋, git diff로 확인 가능)
+
+---
+
+## 기술지원
+
+- 산업은행 오픈 지원 (3/23)
+- 우리카드 형상관리를 위한 구성 패치용 sh 작성 (3/25)
