@@ -2,8 +2,8 @@
 
 | 항목 | 내용 |
 |------|------|
-| 문서 버전 | v2.0 |
-| 작성일 | 2026-04-03 |
+| 문서 버전 | v3.0 |
+| 작성일 | 2026-04-15 |
 | 대상 모듈 | License Management |
 
 ---
@@ -36,21 +36,24 @@
 ### 2.1 라이선스 처리 흐름
 
 ```
-[license_EdgeSquare 파일]
+[license_EdgeSquare 파일 (정식)]
     |
     v
-[Phase 1: LicenseEnvironmentPostProcessor] (Spring Boot 기동 전)
+[Phase 1: StartManagerSpringApplication.resolveModeFromLicense()] (Spring Boot 기동 전)
+    | - license_EdgeSquare → 없으면 license_EdgeSquareDemo (데모 폴백)
     | - DES 복호화
     | - sLicenseTrgtCd에서 모드 결정
     | - edgesquare.mode 프로퍼티 설정
     v
 [Phase 2: LicenseService @PostConstruct] (Spring 컨텍스트 초기화)
-    | - 라이선스 파일 재로드/파싱
+    | - license_EdgeSquare 로드 시도
+    | - 실패 시 → loadDemoLicenseFallback() → license_EdgeSquareDemo 로드
+    | - 데모: 제품코드 없으면 Monitor(33) 기본 적용, demo=true 설정
     | - licenseData (JSONObject) 메모리 보관
-    | - em_preference 테이블에 mode 동기화
     v
 [Runtime]
-    | - LicenseController: REST API 제공
+    | - LicenseController: REST API 제공 (demo 플래그 포함)
+    | - AdminUserController: 로그인 시 경고 팝업 (만료/만료임박)
     | - EdgeRegisterController: Agent 접속 제한
     | - Frontend: cm.getSystemProperty()로 Feature Flag 조회
     v
@@ -61,10 +64,18 @@
 
 ### 2.2 라이선스 파일
 
+#### 정식 라이선스
 - **경로**: `${application.path.home}/license/license_EdgeSquare`
 - **폴백**: `classpath:license/license_EdgeSquare`
 - **형식**: Base64 인코딩 + DES 암호화된 JSON
 - **복호화**: 파일 5~35번째 문자에서 DES 키 추출, 나머지 본문 복호화
+
+#### 데모 라이선스
+- **경로**: `${application.path.home}/license/license_EdgeSquareDemo`
+- **폴백**: `classpath:license/license_EdgeSquareDemo`
+- **적용 조건**: 정식 라이선스(`license_EdgeSquare`) 파일이 없을 때 자동 폴백
+- **제약**: 만료일만 체크, 수량/제품코드 검증 안 함
+- **기본 동작**: 제품코드 없으면 Monitor(33) 자동 적용, `demo=true` 설정
 
 ### 2.3 라이선스 데이터 구조
 
@@ -137,7 +148,11 @@
   "sMaxUser": "100",
   "sLicenseTrgtCd": "32,33",
   "expiredDate": "2026-12-31",
-  "showProduct": "Manager Monitor"
+  "showProduct": "Manager Monitor",
+  "features": { "manager": true, "monitor": true, "deploy": false },
+  "registered": true,
+  "expired": false,
+  "demo": false
 }
 ```
 
@@ -262,7 +277,52 @@ if (isGroupEnabled === "true") {
 - `sMaxAdmin` vs 현재 관리자 수 비교하여 경고 표시
 - 강제 차단은 하지 않음 (경고만)
 
-### 6.5 트래킹 스케줄러
+### 6.5 로그인 시 라이선스 경고 팝업
+
+`LicenseService.getLicenseWarningMessage()`가 로그인 성공 시 호출되어 경고 메시지를 결정한다. 어떤 경우에도 **로그인을 차단하지 않는다** (팝업 알림만).
+
+| 상태 | 팝업 메시지 | 조건 |
+|------|------------|------|
+| 미등록 | "��이선스가 등록되지 않았습니다." | 정식/데모 라이선스 둘 다 없음 |
+| 만료 (정식) | "라이선스가 만료되었습니다." | `isExpired() && !demo` |
+| 만료 (데모) | "데모 라이선스가 만료되었습니다." | `isExpired() && demo` |
+| 만료 임박 (정식) | "라이선스 만료까지 N일 남았습니다." | 만료일 30일 이내, `!demo` |
+| 만료 임박 (데모) | "데모 라이선스 만료까지 N일 남았습니다." | 만료일 30일 이내, `demo` |
+| 데모 정상 (31일+) | 팝업 없음 (null) | `demo && daysLeft > 30` |
+| 정식 정상 (31일+) | 팝업 없음 (null) | `!demo && daysLeft > 30` |
+
+```
+AdminUserController.login()
+    ├─ 로그인 성공 (resultCode == 1)
+    │   └─ licenseService.getLicenseWarningMessage()
+    │       ├─ null → 팝업 없음
+    │       └─ 메시지 있음 → result.put("licenseWarning", message)
+    └─ Frontend: login.xml에서 licenseWarning 있으면 팝업 표시
+```
+
+### 6.6 데모 라이선스 UI 처리 (infoall.xml)
+
+`/api/license/data` 응답의 `demo` 플래그에 따라 라이선스 정보 화면을 분기한다.
+
+| 구분 | 정식 라이선스 | 데모 라이선스 |
+|------|-------------|-------------|
+| 제품 표시 | " Manager Monitor Deploy" | " DEMO " |
+| 최대 관리자 수 | 표시 | **행 숨김** (hide) |
+| 최대 에이전트 수 | 표시 | **행 숨김** (hide) |
+| 만료일 | 표시 | 표시 |
+
+```javascript
+// infoall.xml — scwin.licenseInfo() 콜백
+if (licenseData.demo) {
+    showProduct = " DEMO ";
+    trMaxAdmin.hide();   // 최대 관리자 수 행
+    trMaxUser.hide();    // 최대 에이전트 수 행
+} else {
+    // 기존 제품코드 기반 표시 로직
+}
+```
+
+### 6.7 트래킹 스케줄러
 
 ```java
 @Scheduled(cron = "0 */5 * * * *")  // 5분마다
@@ -281,7 +341,7 @@ public void tracking() {
 
 | 클래스 | 경로 | 설명 |
 |--------|------|------|
-| LicenseEnvironmentPostProcessor | common/config/ | Spring 기동 전 모드 결정 |
+| StartManagerSpringApplication | (root) | Spring 기동 전 라이선스 → edgesquare.mode 결정 (데모 폴백 포함) |
 | LicenseService | common/service/ | 라이선스 핵심 서비스 |
 | LicenseController | common/controller/ | REST API |
 | LicenseDataResponseDTO | edgemanager/controller/api/dto/license/ | 라이선스 조회 응답 |
@@ -305,7 +365,8 @@ public void tracking() {
 
 | 상황 | 동작 |
 |------|------|
-| 라이선스 파일 없음 | mode=monitor 기본값, licenseData=null |
+| 정식 라이선스 파일 없음 | license_EdgeSquareDemo로 데모 폴백, demo=true |
+| 정식+데모 둘 다 없음 | mode=monitor 기본값, licenseData=null |
 | 복호화 실패 | 에러 로그, licenseData=null |
 | DB 동기화 실패 | 경고 로그, 파일 기반 데이터 사용 |
 | Agent 제한 초과 | 빈 토큰 반환 (접속 차단) |
@@ -348,3 +409,4 @@ public void tracking() {
 |------|------|-----------|
 | v1.0 | 2026-04-03 | 최초 작성 |
 | v2.0 | 2026-04-03 | 코드 분석 기반 상세 설계 추가 |
+| v3.0 | 2026-04-15 | 데모 라이선스 폴백(license_EdgeSquareDemo), 로그인 경고 팝업(만료 30일 전), 데모 UI 처리(infoall.xml DEMO 표시/행 숨김), API demo 필드 추가 |
