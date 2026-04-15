@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |------|------|
-| 문서 버전 | v3.0 |
+| 문서 버전 | v3.1 |
 | 작성일 | 2026-04-15 |
 | 대상 모듈 | License Management |
 
@@ -115,10 +115,12 @@
 
 ### 3.2 제품 모드에 따른 컴포넌트 로딩
 
-| 모드 | 조건 | 로딩되는 컴포넌트 |
-|------|------|-------------------|
-| monitor | sLicenseTrgtCd에 "33" 포함 | edgemonitor 패키지 전체 (로그, APM, 대시보드) |
-| manager | "33" 미포함 | edgemonitor 미로딩 |
+| 모드 | 조건 | 로딩되는 컴포넌트 | 메뉴 |
+|------|------|-------------------|------|
+| monitor | sLicenseTrgtCd에 "33" 포함 | edgemonitor 패키지 전체 (로그, APM, 대시보드) | 전체 메뉴 |
+| manager | "33" 미포함 | edgemonitor 미로딩 | esqMode='manager'인 메뉴만 |
+
+> **참고**: 데모/정식 라이선스 구분 없이 `edgesquare.mode` 기반으로 동일하게 메뉴가 필터링된다.
 
 ```
 @ConditionalOnProperty(name="edgesquare.mode", havingValue="monitor", matchIfMissing=true)
@@ -322,6 +324,31 @@ if (licenseData.demo) {
 }
 ```
 
+### 6.8 메뉴 필터링 (buildMenuInfo)
+
+`AdminUserController.buildMenuInfo()`는 로그인 성공 시 사용자에게 반환할 메뉴 목록을 결정한다. 데모/정식 라이선스 구분 없이 `edgesquare.mode`에 따라 동일한 필터링 규칙을 적용한다.
+
+```
+[buildMenuInfo()]
+    |
+    ├─ mode == "monitor" → 전체 메뉴 반환
+    └─ mode == "manager"
+        ├─ 1depth: parentMenuId == null && esqMode == "manager" → allowedIds 수집
+        ├─ 하위 메뉴: parentMenuId ∈ allowedIds → allowedIds에 추가 (반복 탐색)
+        └─ allowedIds에 포함된 메뉴만 반환
+```
+
+| 라이선스 유형 | 모드 | 노출 메뉴 |
+|-------------|------|----------|
+| 정식 | manager | esqMode='manager'인 1depth + 하위 메뉴 |
+| 정식 | monitor | 전체 메뉴 |
+| 데모 | manager | esqMode='manager'인 1depth + 하위 메뉴 (정식과 동일) |
+| 데모 | monitor | 전체 메뉴 (정식과 동일) |
+
+> **변경 이력 (v3.1)**: 기존에는 `licenseService.isDemo() == true`이면 mode 무관하게 전체 메뉴를 반환했으나, 정식 라이선스와 동일한 mode 기반 필터링으로 변경.
+
+---
+
 ### 6.7 트래킹 스케줄러
 
 ```java
@@ -410,3 +437,4 @@ public void tracking() {
 | v1.0 | 2026-04-03 | 최초 작성 |
 | v2.0 | 2026-04-03 | 코드 분석 기반 상세 설계 추가 |
 | v3.0 | 2026-04-15 | 데모 라이선스 폴백(license_EdgeSquareDemo), 로그인 경고 팝업(만료 30일 전), 데모 UI 처리(infoall.xml DEMO 표시/행 숨김), API demo 필드 추가 |
+| v3.1 | 2026-04-15 | buildMenuInfo() 데모 메뉴 필터링 수정 — 데모/정식 무관하게 edgesquare.mode 기반 동일 필터링 적용 |
