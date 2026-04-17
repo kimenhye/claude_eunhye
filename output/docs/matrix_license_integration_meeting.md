@@ -131,6 +131,45 @@ license.feature.organization → 양쪽 동일
 - DB 분리를 유지한다면, 어느 쪽을 기준으로 할 것인지
 - 값이 불일치할 경우 어떤 동작을 기대하는지
 
+### 안건 5: 공통 테이블 DDL 스키마 불일치
+
+EdgeSquare 표준 DDL (`schema/ddl/maria,mysql/DDL.sql`)과 Matrix DDL (`config/Matrix/DDL/Matrix_Manager_DDL.sql`)을 비교한 결과, **41개 공통 테이블 중 5개에서 컬럼 차이**가 발견되었다. (나머지 36개는 동일)
+
+#### 5-1. EdgeSquare에만 있는 컬럼 (Matrix에 누락)
+
+| 테이블 | 컬럼 | 타입 | 용도 |
+|--------|------|------|------|
+| `em_admin_user` | `logout_date` | DATETIME NULL | 로그아웃 일시 |
+| `em_file_dist_package` | `bandwidth` | INT NULL | 배포 대역폭 |
+| `em_file_dist_package` | `description` | VARCHAR(512) NULL | 패키지 설명 |
+| `em_file_dist_version` | `description` | VARCHAR(512) NULL | 버전 설명 |
+| `em_preference` | `data_type` | VARCHAR(32) NULL | 설정 값 타입 |
+
+> EdgeSquare 표준 DDL이 더 최신이며, Matrix DDL에 반영이 안 된 상태
+
+#### 5-2. Matrix에만 있는 컬럼 (Matrix 커스텀)
+
+| 테이블 | 컬럼 | 타입 | 용도 |
+|--------|------|------|------|
+| `em_mobile_crash_log` | `issue_status` | VARCHAR(20) NULL | 이슈 상태 |
+| `em_mobile_crash_log` | `issue_status_update_date` | VARCHAR(17) NULL | 이슈 상태 변경일 |
+| `em_mobile_crash_log` | `issue_resolver_id` | VARCHAR(50) NULL | 이슈 해결자 ID |
+
+> 크래시 로그 이슈 관리용 컬럼으로 Matrix에서 독자적으로 추가한 것으로 보임
+
+#### 5-3. 테이블 분포 (참고)
+
+| 구분 | 수량 | 비고 |
+|------|------|------|
+| 공통 테이블 | 41개 | 그 중 5개에서 컬럼 차이 |
+| EdgeSquare에만 있는 테이블 | 3개 | em_notice, em_notice_target, verifier_webhook |
+| Matrix에만 있는 테이블 | 14개 | esm_dashboard, esm_policy_integrity_*, esm_log_alert_*, em_debug_symbol 등 |
+
+**논의:**
+- DB 통합 시 공통 테이블의 스키마 동기화가 선행되어야 함
+- EdgeSquare 표준 DDL 기준으로 Matrix DDL을 맞출 것인지
+- Matrix 커스텀 컬럼(crash log 이슈 관리)을 EdgeSquare 표준에도 반영할 것인지
+
 ---
 
 ## 4. 제안 방향 (초안)
@@ -142,6 +181,7 @@ license.feature.organization → 양쪽 동일
 
 [중장기] DB 통합 여부 별도 검토
          em_preference 중복 정리
+         공통 테이블 DDL 스키마 동기화
 ```
 
 ---
