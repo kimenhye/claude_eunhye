@@ -18,3 +18,9 @@
 | 2026-04-06 | notice 파일 전환, notification SQL 마이그레이션, SSE 발송 검증, Controller 버그 수정 | `2026-04-06.md` |
 | 2026-04-07 | ESQ-527 예약 발송 시분 단위 변경, notiDate NaN 파싱 수정, 스케줄러 비교 로직 수정 | `2026-04-07.md` |
 | 2026-04-13 | ESQ-342 라이선스 데모 폴백/mode 추가, ESQ-540 프로세스 필터 검색, ESQ-449 Dashboard 1차, Matrix crash 난독화 해제 | `2026-04-13.md` |
+| 2026-04-14 | 라이선스 적용, monitor, DDL 파일 insert문 정리 | `2026-04-14.md` |
+| 2026-04-15 | DB 모델별 migration table sql 분리, ESQ-342 데모 라이선스 분리 | `2026-04-15.md` |
+| 2026-04-16 | Verifier monitor/excludeFilter, 운영 현황 undefined 예외처리, monitor/manager 첫화면 버그 수정 | `2026-04-16.md` |
+| 2026-04-17 | 프로세스현황 드릴다운, DB 구조 정리 + Flyway migration 관리 시작 | `2026-04-17.md` |
+| 2026-04-20 | 커밋 없음 | `2026-04-20.md` |
+| 2026-04-21 | 불필요 insert문 제거 (migration 불필요 반영 완료) | `2026-04-21.md` |
